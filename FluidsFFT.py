@@ -69,15 +69,16 @@ def stablesolve(n,u,v,u1,v1,visc,dt):
         
 
 def updateGenerator(n,u0,v0,indicators,res):
-    u = np.ones(n**2)*10
+    u = np.zeros(n**2)
     v = np.zeros(n**2)
     def update(dt):
         nonlocal u,v,u0,v0
         u,v = stablesolve(n,u,v,u0,v0,0.001,dt)
-        for ind in indicators:
-            ind.update(u[int(ind.x/res)],v[int(ind.y/res)])
-        u0/=2
-        v0/=2
+        for i in range(n):
+            for j in range(n):
+                indicators[i,j].update(u[i+n*j],v[i+n*j])
+        u0 /=2
+        v0 /=2
     return update
          
         
@@ -86,21 +87,27 @@ def updateGenerator(n,u0,v0,indicators,res):
     
     
 def main():
-    n= 30
+    n= 20
     u0 = np.zeros(n*(n+2))
     v0 = np.zeros(n*(n+2))
     size = 600
     res = size/n
-    window = pyglet.window.Window(size, size)
     main_batch = pyglet.graphics.Batch()
+    window = pyglet.window.Window(size, size)
+    rectangles = []
+    for i in range(n):
+        for j in range(n):
+            rectangles.append(pyglet.shapes.BorderedRectangle(i*res,j*res,res,res,color=(0,0,0),batch=main_batch))
+    
     @window.event
     def on_draw():
         window.clear()
         main_batch.draw()
     
-    indicators = [Indicator(n,i*res,j*res, i*res, j*res,batch=main_batch) for i in range(n) for j in range(n)]
+    indicators = np.array([[Indicator(res,(i+.5)*res,(j+.5)*res, (i+.5)*res, (j+.5)*res,batch=main_batch) for j in range(n)] 
+                            for i in range(n)])
     update = updateGenerator(n,u0,v0, indicators, res)
-    pyglet.clock.schedule_interval(update, 1/4)
+    pyglet.clock.schedule_interval(update, 1/8)
 
     @window.event
     def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
@@ -110,8 +117,8 @@ def main():
             y = constrain(y,0,size-1)
             xpos = int(x/res)
             ypos = int(y/res)
-            u0[xpos+(n+2)*ypos] += dx*100
-            v0[xpos+(n+2)*ypos] += dy*100
+            u0[xpos+n*ypos] += dx*10000
+            v0[xpos+n*ypos] += dy*10000
     @window.event
     def on_close():
         print("exiting")

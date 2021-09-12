@@ -53,7 +53,6 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
             x = kx[i,j]
             y = ky[i,j]
             r = x*x+y*y
-            #f = np.exp(-r*dt*visc)
             f = 1/(1+visc*dt*r)
             u[i +n*j] *= f
             v[i+ n*j] *= f
@@ -65,9 +64,8 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
             r = x*x+y*y
             if r==0.0:
                 continue
-            f = np.exp(-r*dt*visc)
-            u[i +n*j] = f*( (1-x*x/r)*u[i +n*j]-x*y/r *v[i +n*j] )
-            v[i+ n*j] = f*( -y*x/r *u[i +n*j] + (1-y*y/r)*v[i +n*j] )
+            u[i +n*j] = (1-x*x/r)*u[i +n*j]-x*y/r *v[i +n*j]
+            v[i+ n*j] = -y*x/r *u[i +n*j] + (1-y*y/r)*v[i +n*j]
                         
     u = ifft(u).real
     v = ifft(v).real
@@ -126,7 +124,7 @@ def updateGenerator(n,u0,v0,s0,indicators,rectangles,res):
         maxVal = max(max(u),max(v))
         for i in range(n):
             for j in range(n):
-                #indicators[i,j].update(u[i+n*j],v[i+n*j],maxVal)
+                indicators[i,j].update(u[i+n*j],v[i+n*j],maxVal)
                 c = constrain(s[i+n*j],0,255)
                 rectangles[i,j].color=(c,c,c)
         u0 /=2

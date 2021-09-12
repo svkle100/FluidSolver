@@ -41,8 +41,8 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
     v = fft2(v)
     #calculate Wavenumbers
     freq = np.fft.fftfreq(n,1/n)
-    kx = np.zeros(n*n).reshape([n,n])
-    ky = np.zeros(n*n).reshape([n,n])
+    kx = np.zeros([n,n])
+    ky = np.zeros([n,n])
     for i in range(n):
         for j in range(n):
             kx[i,j] = 2*np.pi*freq[i]
@@ -52,8 +52,8 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
         for j in range(n):
             x = kx[i,j]
             y = ky[i,j]
-            r = x*x+y*y
-            f = 1/(1+visc*dt*r)
+            kappa = x*x+y*y
+            f = 1/(1+visc*dt*kappa)
             u[i,j] *= f
             v[i,j] *= f
     #Project
@@ -61,11 +61,11 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
         for j in range(n):
             x = kx[i,j]
             y = ky[i,j]
-            r = x*x+y*y
-            if r==0.0:
+            kappa = x*x+y*y
+            if kappa==0.0:
                 continue
-            u[i,j] = (1-x*x/r)*u[i,j]-x*y/r *v[i,j]
-            v[i,j] = -y*x/r *u[i,j] + (1-y*y/r)*v[i,j]
+            u[i,j] = (1-x*x/kappa)*u[i,j]-x*y/kappa *v[i,j]
+            v[i,j] = -y*x/kappa *u[i,j] + (1-y*y/kappa)*v[i,j]
                         
     u = ifft2(u).real
     v = ifft2(v).real
@@ -105,8 +105,8 @@ def substanceSolve(n,s,sS,u,v,diffRate,dissRate,dt):
         for j in range(n):
             x = kx[i,j]
             y = ky[i,j]
-            r = x*x+y*y
-            f = 1/(1+diffRate*dt*r)
+            kappa = x*x+y*y
+            f = 1/(1+diffRate*dt*kappa)
             s[i,j] *= f
     s = ifft2(s).real
     #Dissipation
@@ -117,10 +117,13 @@ def updateGenerator(n,u0,v0,s0,indicators,rectangles,res):
     u = np.zeros([n,n])
     v = np.zeros([n,n])
     s = np.zeros([n,n])
+    visc = 0.0001
+    diffRate =0.001
+    dissRate = 0.001
     def update(dt):
         nonlocal u,v,s,u0,v0,s0
-        u,v = stablesolve(n,u,v,u0,v0,0.001,dt)
-        s = substanceSolve(n,s,s0,u,v,0.00001,0.00001,dt)
+        u,v = stablesolve(n,u,v,u0,v0,visc,dt)
+        s = substanceSolve(n,s,s0,u,v,diffRate,dissRate,dt)
         maxVal = max(np.amax(np.abs(u)),np.max(np.abs(v)))
         for i in range(n):
             for j in range(n):
@@ -142,6 +145,7 @@ def main():
     u0 = np.zeros([n,n])
     v0 = np.zeros([n,n])
     s0 = np.zeros([n,n])
+    
     size = 600
     res = size/n
     main_batch = pyglet.graphics.Batch()

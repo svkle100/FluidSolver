@@ -9,10 +9,7 @@ import numpy as np
 
 def constrain(val, min_val, max_val):
     return min(max_val, max(min_val, val))
-def interpolate(value, a, b,newa,newb):
-    if b-a==0:
-        return 0
-    return value/(b-a)*(newb-newa)+newb
+
 
 class Indicator(pyglet.shapes.Line):
     def __init__(self,res, *args, **kwargs):

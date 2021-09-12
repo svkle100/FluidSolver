@@ -21,8 +21,8 @@ class Indicator(pyglet.shapes.Line):
         self.min = 0.001
         
     def update(self,vx,vy,maxValue):
-        vx *=(self.res/2.2)/maxValue**2
-        vy *=(self.res/2.2)/maxValue**2
-        norm = np.linalg.norm([vx,vy])
-        self.x2 = self.x + vx/norm*self.res/2
-        self.y2 = self.y + vy/norm*self.res/2
+        if maxValue!=0:
+            vx /=maxValue
+            vy /=maxValue
+        self.x2 = self.x + vx*self.res/2
+        self.y2 = self.y + vy*self.res/2

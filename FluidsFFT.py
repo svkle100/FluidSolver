@@ -8,76 +8,131 @@ import pyglet
 from pyglet.window import mouse
 import numpy as np
 from indicator import Indicator
-from scipy.fft import fft,ifft
+from scipy.fft import fft2,ifft2
 from indicator import constrain
  
-def stablesolve(n,u,v,u1,v1,visc,dt):
-    u0 = u1.copy()
-    v0 = v1.copy()
-    for i in range(n**2):
-            u[i] += dt*u0[i]
-            u0[i] = u[i]
-            v[i] += dt*v0[i]
-            v0[i] = v[i]
+def stablesolve(n,u,v,uF,vF,visc,dt):
+
+    #Add Force
+    u+=dt*uF
+    v+=dt*vF
+    u0 = u.copy()
+    v0 = v.copy()
+    #Advect
     for x in range(n):
         for y in range(n):
-                x0 = x-n*dt*u0[x+n*y]
+                x0 = x-n*dt*u0[x,y]
                 i0 = int(np.floor(x0))
                 s = x0-i0
                 i0 %= n
                 i1 = (i0+1)%n
                 
-                y0 = y-n*dt*v0[x+n*y]
+                y0 = y-n*dt*v0[x,y]
                 j0 = int(np.floor(y0))
                 t = y0-j0
                 j0 %= n
                 j1 = (j0+1)%n
-                u[x+n*y] = (1-s)*((1-t)*u0[i0+n*j0]+t*u0[i0+n*j1])+\
-                    s*((1-t)*u0[i1+n*j0]+t*u0[i1+n*j1])
-                v[x+n*y] = (1-s)*((1-t)*v0[i0+n*j0]+t*v0[i0+n*j1])+\
-                    s*((1-t)*v0[i1+n*j0]+t*v0[i1+n*j1])
-    for i in range(n):
-        for j in range(n):
-            u0[i+(n+2)*j] = u[i+n*j] 
-            v0[i+(n+2)*j] = v[i+n*j]
-    u0 = fft(u0)
-    v0 = fft(v0)
-    U = [0,0]; V = [0,0]
-    for i in range(0,n+1,2):
-        x = 0.5*i
-        for j in range(n):
-            y = j if j<=n/2 else j-n
-            r = x*x+y*y
-            if r==0.0:
-                continue
-            f = np.exp(-r*dt*visc)
-            U[0] = u0[i +(n+2)*j]; V[0] = v0[i +(n+2)*j]
-            U[1] = u0[i+1+(n+2)*j]; V[1] = v0[i+1+(n+2)*j]
-            u0[i +(n+2)*j] = f*( (1-x*x/r)*U[0]-x*y/r *V[0] )
-            u0[i+1+(n+2)*j] = f*( (1-x*x/r)*U[1]-x*y/r *V[1] )
-            v0[i+ (n+2)*j] = f*( -y*x/r *U[0] + (1-y*y/r)*V[0] )
-            v0[i+1+(n+2)*j] = f*( -y*x/r *U[1] + (1-y*y/r)*V[1] )
-                        
-    u0 = ifft(u0).real
-    v0 = ifft(v0).real
-    f = 1.0/(n**2);
-    for i in range(n):
-        for j in range(n):
-            u[i+n*j] = f*u0[i+(n+2)*j]
-            v[i+n*j] = f*v0[i+(n+2)*j]
-    return u,v
-        
+                u[x,y] = (1-s)*((1-t)*u0[i0,j0]+t*u0[i0,j1])+\
+                    s*((1-t)*u0[i1,j0]+t*u0[i1,j1])
+                v[x,y] = (1-s)*((1-t)*v0[i0,j0]+t*v0[i0,j1])+\
+                    s*((1-t)*v0[i1,j0]+t*v0[i1,j1])
 
-def updateGenerator(n,u0,v0,indicators,res):
-    u = np.ones(n**2)*10
-    v = np.zeros(n**2)
+    u = fft2(u)
+    v = fft2(v)
+    #calculate Wavenumbers
+    freq = np.fft.fftfreq(n,1/n)
+    kx = np.zeros([n,n])
+    ky = np.zeros([n,n])
+    for i in range(n):
+        for j in range(n):
+            kx[i,j] = 2*np.pi*freq[i]
+            ky[i,j] = 2*np.pi*freq[j]
+    #Diffuse
+    for i in range(n):
+        for j in range(n):
+            x = kx[i,j]
+            y = ky[i,j]
+            kappa = x*x+y*y
+            f = 1/(1+visc*dt*kappa)
+            u[i,j] *= f
+            v[i,j] *= f
+    #Project
+    for i in range(n):
+        for j in range(n):
+            x = kx[i,j]
+            y = ky[i,j]
+            kappa = x*x+y*y
+            if kappa==0.0:
+                continue
+            u[i,j] = (1-x*x/kappa)*u[i,j]-x*y/kappa *v[i,j]
+            v[i,j] = -y*x/kappa *u[i,j] + (1-y*y/kappa)*v[i,j]
+                        
+    u = ifft2(u).real
+    v = ifft2(v).real
+    return u.copy(),v.copy()
+ 
+def substanceSolve(n,s,sS,u,v,diffRate,dissRate,dt):
+    #Add Source 
+    s+=dt*sS
+    s0 = s.copy()
+    #Advect
+    for x in range(n):
+        for y in range(n):
+                x0 = x-n*dt*u[x,y]
+                i0 = int(np.floor(x0))
+                a = x0-i0
+                i0 %= n
+                i1 = (i0+1)%n
+                
+                y0 = y-n*dt*v[x,y]
+                j0 = int(np.floor(y0))
+                b = y0-j0
+                j0 %= n
+                j1 = (j0+1)%n
+                s[x,y] = (1-a)*((1-b)*s0[i0,j0]+b*s0[i0,j1])+\
+                    a*((1-b)*s0[i1,j0]+b*s0[i1,j1])
+    s = fft2(s)
+    #calculate Wavenumbers
+    freq = np.fft.fftfreq(n,1/n)
+    kx = np.zeros(n*n).reshape([n,n])
+    ky = np.zeros(n*n).reshape([n,n])
+    for i in range(n):
+        for j in range(n):
+            kx[i,j] = 2*np.pi*freq[i]
+            ky[i,j] = 2*np.pi*freq[j]
+    #Diffuse
+    for i in range(n):
+        for j in range(n):
+            x = kx[i,j]
+            y = ky[i,j]
+            kappa = x*x+y*y
+            f = 1/(1+diffRate*dt*kappa)
+            s[i,j] *= f
+    s = ifft2(s).real
+    #Dissipation
+    s/= (1+dt*dissRate)
+    return s
+
+def updateGenerator(n,u0,v0,s0,indicators,rectangles,res):
+    u = np.zeros([n,n])
+    v = np.zeros([n,n])
+    s = np.zeros([n,n])
+    visc = 0.0001
+    diffRate =0.001
+    dissRate = 0.001
     def update(dt):
-        nonlocal u,v,u0,v0
-        u,v = stablesolve(n,u,v,u0,v0,0.001,dt)
-        for ind in indicators:
-            ind.update(u[int(ind.x/res)],v[int(ind.y/res)])
-        u0/=2
-        v0/=2
+        nonlocal u,v,s,u0,v0,s0
+        u,v = stablesolve(n,u,v,u0,v0,visc,dt)
+        s = substanceSolve(n,s,s0,u,v,diffRate,dissRate,dt)
+        maxVal = max(np.amax(np.abs(u)),np.max(np.abs(v)))
+        for i in range(n):
+            for j in range(n):
+                #indicators[i,j].update(u[i,j],v[i,j],maxVal)
+                c = constrain(s[i,j],0,255)
+                rectangles[i,j].color=(c,c,c)
+        u0 /=2
+        v0 /=2
+        s0 /=2
     return update
          
         
@@ -86,32 +141,46 @@ def updateGenerator(n,u0,v0,indicators,res):
     
     
 def main():
-    n= 30
-    u0 = np.zeros(n*(n+2))
-    v0 = np.zeros(n*(n+2))
+    n= 40
+    u0 = np.zeros([n,n])
+    v0 = np.zeros([n,n])
+    s0 = np.zeros([n,n])
+    
     size = 600
     res = size/n
-    window = pyglet.window.Window(size, size)
     main_batch = pyglet.graphics.Batch()
+    window = pyglet.window.Window(size, size)
+    rectangles = np.array([[pyglet.shapes.Rectangle(i*res,j*res,res,res,color=(0,0,0),batch=main_batch) for j in range(n)] 
+                            for i in range(n)])
+    
     @window.event
     def on_draw():
         window.clear()
         main_batch.draw()
     
-    indicators = [Indicator(n,i*res,j*res, i*res, j*res,batch=main_batch) for i in range(n) for j in range(n)]
-    update = updateGenerator(n,u0,v0, indicators, res)
-    pyglet.clock.schedule_interval(update, 1/4)
+    indicators = np.array([[Indicator(res,(i+.5)*res,(j+.5)*res, (i+.5)*res, (j+.5)*res,batch=main_batch) for j in range(n)] 
+                            for i in range(n)])
+    update = updateGenerator(n,u0,v0,s0, indicators,rectangles, res)
+    pyglet.clock.schedule_interval(update, 1/120)
 
     @window.event
     def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
-        nonlocal u0,v0
+        nonlocal u0,v0,s0
         if buttons & mouse.LEFT:
             x = constrain(x,0,size-1)
             y = constrain(y,0,size-1)
             xpos = int(x/res)
             ypos = int(y/res)
-            u0[xpos+(n+2)*ypos] += dx*100
-            v0[xpos+(n+2)*ypos] += dy*100
+            u0[xpos,ypos] += dx*3
+            v0[xpos,ypos] += dy*3
+
+
+        if buttons & mouse.RIGHT:
+            x = constrain(x,0,size-1)
+            y = constrain(y,0,size-1)
+            xpos = int(x/res)
+            ypos = int(y/res)
+            s0[xpos,ypos] += 2000
     @window.event
     def on_close():
         print("exiting")

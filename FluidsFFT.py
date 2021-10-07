@@ -16,9 +16,9 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
     #Add Force
     u+=dt*uF
     v+=dt*vF
+    #Advect
     u0 = u.copy()
     v0 = v.copy()
-    #Advect
     for x in range(n):
         for y in range(n):
                 x0 = x-n*dt*u0[x,y]
@@ -69,13 +69,13 @@ def stablesolve(n,u,v,uF,vF,visc,dt):
                         
     u = ifft2(u).real
     v = ifft2(v).real
-    return u.copy(),v.copy()
+    return u,v
  
 def substanceSolve(n,s,sS,u,v,diffRate,dissRate,dt):
     #Add Source 
     s+=dt*sS
-    s0 = s.copy()
     #Advect
+    s0 = s.copy()
     for x in range(n):
         for y in range(n):
                 x0 = x-n*dt*u[x,y]
@@ -127,9 +127,9 @@ def updateGenerator(n,u0,v0,s0,indicators,rectangles,res):
         maxVal = max(np.amax(np.abs(u)),np.max(np.abs(v)))
         for i in range(n):
             for j in range(n):
-                #indicators[i,j].update(u[i,j],v[i,j],maxVal)
+                indicators[i,j].update(u[i,j],v[i,j],maxVal)
                 c = constrain(s[i,j],0,255)
-                rectangles[i,j].color=(c,c,c)
+                #rectangles[i,j].color=(c,c,c)
         u0 /=2
         v0 /=2
         s0 /=2
@@ -183,7 +183,6 @@ def main():
             s0[xpos,ypos] += 2000
     @window.event
     def on_close():
-        print("exiting")
         pyglet.clock.unschedule(update)
         pyglet.app.exit()
     pyglet.app.run()
